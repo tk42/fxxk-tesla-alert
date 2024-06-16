@@ -3,6 +3,8 @@ const countdownElement = document.getElementById('countdown');
 const button = document.getElementById('timerButton');
 const alarm = new Audio('alarm.mp3');
 
+alarm.load();
+
 button.addEventListener('click', function() {
     clearInterval(countdown);
     var timeLeft = 14;
