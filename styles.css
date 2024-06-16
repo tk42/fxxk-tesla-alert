@@ -40,7 +40,7 @@ button {
     margin-bottom: 20px; /* テキストとの間隔 */
 }
 
-#timerDisplay {
+#countdown {
     font-family: 'Roboto Mono', monospace;
     font-size: 4em;
     color: #ddd;  // ホワイトテキストカラー
