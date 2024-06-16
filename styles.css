@@ -1,0 +1,53 @@
+body, html {
+    height: 100%;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    font-family: Arial, sans-serif;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background-color: #333; /* ダークグレー背景 */
+}
+
+.app {
+    width: 100%;  /* アプリ全体の幅を100%に設定 */
+    height: 100%; /* アプリ全体の高さを100%に設定 */
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+}
+
+button {
+    width: 100%;  /* ボタンの幅を100%に設定 */
+    height: 100%; /* ボタンの高さを100%に設定 */
+    font-size: 2em; /* フォントサイズを大きく設定 */
+    cursor: pointer;
+    border: none;
+    background-color: #555; /* ダークグレーのボタン */
+    color: white; /* ホワイトテキスト */
+    outline: none; /* アウトラインを非表示 */
+    position: relative; /* 相対位置指定 */
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+}
+
+.button-image {
+    width: 30%; /* 画像の幅をボタンの30%に設定 */
+    margin-bottom: 20px; /* テキストとの間隔 */
+}
+
+#timerDisplay {
+    font-family: 'Roboto Mono', monospace;
+    font-size: 4em;
+    color: #ddd;  // ホワイトテキストカラー
+    text-shadow: 2px 2px 4px #000;  // テキストに影を追加
+    transition: all 0.3s ease-in-out;
+    position: absolute; /* 絶対位置指定 */
+    top: 65%; /* トップから50%の位置に設定 */
+    left: 50%; /* 左から50%の位置に設定 */
+    transform: translate(-50%, -50%); /* 中心に配置 */
+}
