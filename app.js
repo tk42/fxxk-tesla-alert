@@ -1,4 +1,4 @@
-const button = document.getElementById('startButton');
+const button = document.getElementById('countdownButton');
 const alarm = document.getElementById('alarmSound');
 let countdown;
 
