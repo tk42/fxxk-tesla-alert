@@ -6,10 +6,12 @@ const alarm = new Audio('alarm.mp3');
 alarm.load();
 
 button.addEventListener('click', function() {
-    clearInterval(countdown);
+    if (countdown) {
+        clearInterval(countdown);
+        alarm.pause();
+        alarm.currentTime = 0;
+    }
     var timeLeft = 14;
-    alarm.pause();
-    alarm.currentTime = 0;
     countdownElement.textContent = "0:"+timeLeft.toString().padStart(2, '0');
     countdown = setInterval(function() {
         timeLeft -= 1;
