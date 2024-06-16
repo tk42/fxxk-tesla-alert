@@ -1,7 +1,6 @@
 let countdown;
 const timerDisplay = document.getElementById('timerDisplay');
 const countdownButton = document.getElementById('countdownButton');
-const audio = new Audio('alarm.mp3');  // サウンドファイルのパス
 
 function timer(seconds) {
     // 再生中の音声があれば停止
@@ -31,6 +30,8 @@ function displayTimeLeft(seconds) {
     timerDisplay.textContent = display;
 }
 
+const audio = document.getElementById('audio');
 countdownButton.addEventListener('click', () => {
+    audio.play();
     timer(14);
 });

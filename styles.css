@@ -36,7 +36,7 @@ button {
 }
 
 .button-image {
-    width: 30%; /* 画像の幅をボタンの30%に設定 */
+    width: 50%; /* 画像の幅をボタンの30%に設定 */
     margin-bottom: 20px; /* テキストとの間隔 */
 }
 
@@ -47,7 +47,7 @@ button {
     text-shadow: 2px 2px 4px #000;  // テキストに影を追加
     transition: all 0.3s ease-in-out;
     position: absolute; /* 絶対位置指定 */
-    top: 65%; /* トップから50%の位置に設定 */
+    top: 70%; /* トップから50%の位置に設定 */
     left: 50%; /* 左から50%の位置に設定 */
     transform: translate(-50%, -50%); /* 中心に配置 */
 }
