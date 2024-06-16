@@ -2,10 +2,14 @@ let countdown;
 const countdownElement = document.getElementById('countdown');
 const button = document.getElementById('timerButton');
 const alarm = new Audio('alarm.mp3');
+const playSilence = new Audio("250-milliseconds-of-silence.mp3")
 
+document.addEventListener('mousedown', () => {
+    playSilence.play()
+    alarm.load()
+})
 
 button.addEventListener('click', function() {
-    alarm.load();
     if (countdown) {
         clearInterval(countdown);
         alarm.pause();
