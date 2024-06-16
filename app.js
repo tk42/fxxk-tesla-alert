@@ -2,10 +2,24 @@ let countdown;
 const timerDisplay = document.getElementById('timerDisplay');
 const countdownButton = document.getElementById('countdownButton');
 
+// オーディオの再生
+function playSound() {
+    var source = audioContext.createBufferSource();
+    source.buffer = audioBuffer;
+    source.connect(audioContext.destination);
+    source.start(0);
+}
+
+// オーディオ停止
+function stopSound() {
+    var source = audioContext.createBufferSource();
+    source.stop();
+}
+
 function timer(seconds) {
     // 再生中の音声があれば停止
-    audio.pause();
-    audio.currentTime = 0; // 再生位置を音声の開始位置にリセット
+    stopSound();
+    // audio.currentTime = 0; // 再生位置を音声の開始位置にリセット
 
     clearInterval(countdown);
     const now = Date.now();
@@ -16,7 +30,7 @@ function timer(seconds) {
         const secondsLeft = Math.round((then - Date.now()) / 1000);
         if (secondsLeft < 0) {
             clearInterval(countdown);
-            audio.play();  // サウンドを再生
+            playSound();
             return;
         }
         displayTimeLeft(secondsLeft);
@@ -50,18 +64,9 @@ function loadAudio() {
     request.send();
 }
 
-// オーディオの再生
-function playSound() {
-    var source = audioContext.createBufferSource();
-    source.buffer = audioBuffer;
-    source.connect(audioContext.destination);
-    source.start(0);
-}
-
 // イベントリスナー
 countdownButton.addEventListener('click', function() {
     timer(14);
-    playSound();
 });
 
 // オーディオファイルのプリロード
