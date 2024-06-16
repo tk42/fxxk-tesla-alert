@@ -30,8 +30,39 @@ function displayTimeLeft(seconds) {
     timerDisplay.textContent = display;
 }
 
-const audio = document.getElementById('audio');
-countdownButton.addEventListener('click', () => {
-    audio.play();
+// AudioContextの設定
+var audioContext = new (window.AudioContext || window.webkitAudioContext)();
+var audioBuffer;
+
+// オーディオファイルのロード
+function loadAudio() {
+    var request = new XMLHttpRequest();
+    request.open('GET', 'alarm.mp3', true);
+    request.responseType = 'arraybuffer';
+
+    request.onload = function() {
+        audioContext.decodeAudioData(request.response, function(buffer) {
+            audioBuffer = buffer;
+        }, function(e) {
+            console.log('Audio error! ', e);
+        });
+    }
+    request.send();
+}
+
+// オーディオの再生
+function playSound() {
+    var source = audioContext.createBufferSource();
+    source.buffer = audioBuffer;
+    source.connect(audioContext.destination);
+    source.start(0);
+}
+
+// イベントリスナー
+countdownButton.addEventListener('click', function() {
+    playSound();
     timer(14);
 });
+
+// オーディオファイルのプリロード
+loadAudio();
