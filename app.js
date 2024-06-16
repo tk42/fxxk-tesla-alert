@@ -60,8 +60,8 @@ function playSound() {
 
 // イベントリスナー
 countdownButton.addEventListener('click', function() {
-    playSound();
     timer(14);
+    playSound();
 });
 
 // オーディオファイルのプリロード
