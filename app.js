@@ -15,7 +15,7 @@ button.addEventListener('click', function() {
         alarm.pause();
         alarm.currentTime = 0;
     }
-    var timeLeft = 14;
+    var timeLeft = 12;
     countdownElement.textContent = "0:"+timeLeft.toString().padStart(2, '0');
     countdown = setInterval(function() {
         timeLeft -= 1;
