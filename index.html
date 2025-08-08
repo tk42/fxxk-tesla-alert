@@ -1,22 +1,23 @@
 <!DOCTYPE html>
 <html lang="ja">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;700&display=swap"
-      rel="stylesheet"
-    />
-    <title>fxxk-tesla-alert</title>
-    <link rel="stylesheet" href="styles.css" />
-  </head>
-  <body>
-    <div class="app">
-      <button id="timerButton">
-        <img src="image.png" alt="tesla-logo" class="button-image" />
-      </button>
-      <p id="countdown">0:12</p>
-    </div>
-    <script src="app.js"></script>
-  </body>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>alarm test</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app">
+    <button id="timerButton">
+      <img src="image.png" alt="tesla-logo" class="button-image"/>
+    </button>
+    <p id="countdown">0:12</p>
+  </div>
+
+  <!-- 重要：DOM内に置く。preloadで先読み -->
+  <audio id="alarm" src="alarm.mp3" preload="auto"></audio>
+  <audio id="silence" src="250-milliseconds-of-silence.mp3" preload="auto"></audio>
+
+  <script src="app.js"></script>
+</body>
 </html>
