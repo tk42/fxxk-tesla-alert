@@ -1,80 +1,68 @@
-let countdownId = null;
-let endAt = null;
-let audioUnlocked = false;
+let timerId = null;
+let endAt = 0;
+let unlocked = false;
 
-const countdownElement = document.getElementById('countdown');
+const countdownEl = document.getElementById('countdown');
 const button = document.getElementById('timerButton');
+const alarm = document.getElementById('alarm');
+const silence = document.getElementById('silence');
 
-const alarm = document.getElementById('alarm') || new Audio('alarm.mp3');
-const silence = document.getElementById('silence') || new Audio('250-milliseconds-of-silence.mp3');
+// デバッグ：読み込み/エラー確認
+alarm.addEventListener('canplaythrough', () => console.log('alarm ready'));
+alarm.addEventListener('error', (e) => console.error('alarm load error', alarm.error));
+silence.addEventListener('canplaythrough', () => console.log('silence ready'));
+silence.addEventListener('error', (e) => console.error('silence load error', silence.error));
 
+// 初回タップでオーディオ権限を“解錠”
 async function unlockAudio() {
-  if (audioUnlocked) return;
+  if (unlocked) return;
   try {
-    // 最初のユーザー操作内で無音→即停止してオーディオを解錠
-    await silence.play();
-    silence.pause();
-    silence.currentTime = 0;
+    await silence.play(); // 無音を再生
+    silence.pause(); silence.currentTime = 0;
 
-    // アラームも一度だけ“鳴らして→即停止”でデコードを確実に
+    // デコードを早める（鳴らしてすぐ止める）
     await alarm.play();
-    alarm.pause();
-    alarm.currentTime = 0;
+    alarm.pause(); alarm.currentTime = 0;
 
-    audioUnlocked = true;
+    unlocked = true;
+    console.log('audio unlocked');
   } catch (e) {
-    // 失敗しても次のタップで再挑戦
-    console.debug('Audio unlock failed:', e);
+    console.warn('unlock failed, try again on next tap', e);
   }
 }
 
-// iOSは mousedown より pointerdown/touchstart の方が安定
-document.addEventListener('pointerdown', unlockAudio, { once: false });
+// iOS/Android両対応のユーザー操作フック
+document.addEventListener('pointerdown', unlockAudio, { passive: true });
 
+// タイマー制御
 function stopTimer() {
-  if (countdownId) {
-    clearInterval(countdownId);
-    countdownId = null;
-  }
-  alarm.pause();
-  alarm.currentTime = 0;
+  if (timerId) { clearInterval(timerId); timerId = null; }
+  alarm.pause(); alarm.currentTime = 0;
 }
 
-function startTimer(seconds = 12) {
+function startTimer(sec = 12) {
   stopTimer();
-  endAt = Date.now() + seconds * 1000;
-
-  // すぐに表示更新
+  endAt = Date.now() + sec * 1000;
   updateDisplay();
-
-  countdownId = setInterval(() => {
-    updateDisplay();
-  }, 250); // 1秒より細かく更新してズレを抑制
+  timerId = setInterval(updateDisplay, 200);
 }
 
 function updateDisplay() {
-  const msLeft = Math.max(0, endAt - Date.now());
-  const secLeft = Math.ceil(msLeft / 1000); // 見た目のズレを抑える
-  countdownElement.textContent = `0:${String(secLeft).padStart(2, '0')}`;
-
-  if (msLeft <= 0) {
-    clearInterval(countdownId);
-    countdownId = null;
-    // 再生（解錠済みなら確実に鳴る）
-    alarm.play().catch(e => console.error('再生エラー:', e));
-    // 可能なら振動
+  const ms = Math.max(0, endAt - Date.now());
+  const s = Math.ceil(ms / 1000);
+  countdownEl.textContent = `0:${String(s).padStart(2,'0')}`;
+  if (ms <= 0) {
+    clearInterval(timerId); timerId = null;
+    alarm.play().catch(e => console.error('play error:', e));
     if (navigator.vibrate) navigator.vibrate(200);
   }
 }
 
 button.addEventListener('click', async () => {
-  // クリック時に解錠を試みる（未解錠でもOK）
   await unlockAudio();
-
-  // ボタンのトグル動作：実行中なら停止、停止中なら開始
-  if (countdownId) {
+  if (timerId) {
     stopTimer();
-    countdownElement.textContent = '0:12';
+    countdownEl.textContent = '0:12';
   } else {
     startTimer(12);
   }
