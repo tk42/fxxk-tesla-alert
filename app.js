@@ -4,66 +4,81 @@ let endAt = 0;
 const countdownEl = document.getElementById('countdown');
 const button = document.getElementById('timerButton');
 
-// ---- Web Audio 準備 ----
 let ctx = null;
 let alarmBuffer = null;
-let unlocking = false;
+let alarmBytes = null;   // ArrayBufferを保持
+let booting = false;
+let needReinit = false;
 
-async function unlockAndPreload() {
-  if (alarmBuffer || unlocking) return;
-  unlocking = true;
-
-  try {
-    // 1) ユーザー操作内でAudioContextを必ずresume
-    if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)();
-    if (ctx.state !== 'running') await ctx.resume();
-
-    // 2) 音源をfetch→decode（同一オリジンの alarm.mp3 前提）
-    const res = await fetch('alarm.mp3', { cache: 'reload' });
-    if (!res.ok) throw new Error('failed to fetch alarm.mp3');
-    const arr = await res.arrayBuffer();
-
-    // 3) デコード（ここまで全てユーザー操作直後に行う）
-    alarmBuffer = await ctx.decodeAudioData(arr);
-    // ここまで来れば“解錠済み”
-  } catch (e) {
-    console.warn('Audio unlock/preload failed:', e);
-  } finally {
-    unlocking = false;
-  }
+async function fetchOnce() {
+  if (alarmBytes) return;
+  const res = await fetch('alarm.mp3'); // GitHub Pagesなら相対パスでOK（index.htmlと同階層）
+  if (!res.ok) throw new Error('fetch alarm.mp3 failed');
+  alarmBytes = await res.arrayBuffer();
 }
 
-// iOS/Android 両対応：あらゆる最初のジェスチャで解錠
-const unlockEvents = ['pointerdown', 'touchstart', 'click'];
-unlockEvents.forEach(evt => {
-  document.addEventListener(evt, () => {
-    unlockAndPreload(); // 失敗しても次のタップで再試行
-  }, { passive: true, once: false });
-});
-
-// ---- 再生 ----
-function playAlarm() {
-  if (!ctx || !alarmBuffer) {
-    // 念のため再開＆再プリロードを試す
-    unlockAndPreload();
-    return;
+// コンテキストを必ず“生きた状態”に
+async function ensureContext() {
+  if (!ctx || ctx.state === 'closed' || needReinit) {
+    ctx = new (window.AudioContext || window.webkitAudioContext)();
+    alarmBuffer = null; // 別Contextなので作り直す
+    needReinit = false;
   }
   if (ctx.state !== 'running') {
-    // バックグラウンド復帰直後など
-    ctx.resume().catch(()=>{});
+    try { await ctx.resume(); } catch {}
   }
-  const src = ctx.createBufferSource();
-  src.buffer = alarmBuffer;
-  src.connect(ctx.destination);
-  src.start();
+  return ctx.state === 'running';
 }
 
-// ---- タイマー ----
-function stopTimer() {
-  if (timerId) {
-    clearInterval(timerId);
-    timerId = null;
+// デコード（既に済ならスキップ）
+async function ensureDecoded() {
+  if (alarmBuffer) return;
+  if (!alarmBytes) await fetchOnce();
+  // iOS対策：decodeAudioDataはContextごとにやり直すのが安全
+  alarmBuffer = await ctx.decodeAudioData(alarmBytes.slice(0)); // sliceでコピー渡し
+}
+
+// 初回タップや再生前に呼ぶ
+async function bootAudioPipeline() {
+  if (booting) return;
+  booting = true;
+  try {
+    const ok = await ensureContext();
+    if (!ok) throw new Error('AudioContext not running');
+    await ensureDecoded();
+  } finally {
+    booting = false;
   }
+}
+
+async function playAlarm() {
+  try {
+    await bootAudioPipeline();
+    // 念のため直前にもresume
+    if (ctx.state !== 'running') await ctx.resume();
+    const src = ctx.createBufferSource();
+    src.buffer = alarmBuffer;
+    src.connect(ctx.destination);
+    src.start();
+  } catch (e) {
+    console.warn('play failed, retrying once...', e);
+    // 失敗時は再初期化してもう一度だけ試す
+    needReinit = true;
+    try {
+      await bootAudioPipeline();
+      const src = ctx.createBufferSource();
+      src.buffer = alarmBuffer;
+      src.connect(ctx.destination);
+      src.start();
+    } catch (e2) {
+      console.error('play retry failed:', e2);
+    }
+  }
+}
+
+// ===== タイマー =====
+function stopTimer() {
+  if (timerId) { clearInterval(timerId); timerId = null; }
 }
 
 function startTimer(sec = 12) {
@@ -78,16 +93,20 @@ function updateDisplay() {
   const s = Math.ceil(ms / 1000);
   countdownEl.textContent = `0:${String(s).padStart(2, '0')}`;
   if (ms <= 0) {
-    clearInterval(timerId);
-    timerId = null;
+    clearInterval(timerId); timerId = null;
     playAlarm();
     if (navigator.vibrate) navigator.vibrate(200);
   }
 }
 
-// ボタン：トグル開始/停止（クリック自体が解錠イベント）
+// 任意のジェスチャでパイプライン起動（解錠）
+['pointerdown','touchstart','click'].forEach(evt => {
+  document.addEventListener(evt, () => { bootAudioPipeline(); }, { passive:true });
+});
+
+// ボタン
 button.addEventListener('click', async () => {
-  await unlockAndPreload();
+  await bootAudioPipeline();
   if (timerId) {
     stopTimer();
     countdownEl.textContent = '0:12';
@@ -96,7 +115,10 @@ button.addEventListener('click', async () => {
   }
 });
 
-// ページ復帰でズレを補正
+// タブ復帰・ページ遷移で再初期化を促す
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible' && timerId) updateDisplay();
+  if (document.visibilityState === 'hidden') needReinit = true;
 });
+window.addEventListener('pagehide', () => { needReinit = true; });
+window.addEventListener('freeze', () => { needReinit = true; });
