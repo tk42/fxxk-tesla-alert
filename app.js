@@ -1,43 +1,69 @@
 let timerId = null;
 let endAt = 0;
-let unlocked = false;
 
 const countdownEl = document.getElementById('countdown');
 const button = document.getElementById('timerButton');
-const alarm = document.getElementById('alarm');
-const silence = document.getElementById('silence');
 
-// デバッグ：読み込み/エラー確認
-alarm.addEventListener('canplaythrough', () => console.log('alarm ready'));
-alarm.addEventListener('error', (e) => console.error('alarm load error', alarm.error));
-silence.addEventListener('canplaythrough', () => console.log('silence ready'));
-silence.addEventListener('error', (e) => console.error('silence load error', silence.error));
+// ---- Web Audio 準備 ----
+let ctx = null;
+let alarmBuffer = null;
+let unlocking = false;
 
-// 初回タップでオーディオ権限を“解錠”
-async function unlockAudio() {
-  if (unlocked) return;
+async function unlockAndPreload() {
+  if (alarmBuffer || unlocking) return;
+  unlocking = true;
+
   try {
-    await silence.play(); // 無音を再生
-    silence.pause(); silence.currentTime = 0;
+    // 1) ユーザー操作内でAudioContextを必ずresume
+    if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)();
+    if (ctx.state !== 'running') await ctx.resume();
 
-    // デコードを早める（鳴らしてすぐ止める）
-    await alarm.play();
-    alarm.pause(); alarm.currentTime = 0;
+    // 2) 音源をfetch→decode（同一オリジンの alarm.mp3 前提）
+    const res = await fetch('alarm.mp3', { cache: 'reload' });
+    if (!res.ok) throw new Error('failed to fetch alarm.mp3');
+    const arr = await res.arrayBuffer();
 
-    unlocked = true;
-    console.log('audio unlocked');
+    // 3) デコード（ここまで全てユーザー操作直後に行う）
+    alarmBuffer = await ctx.decodeAudioData(arr);
+    // ここまで来れば“解錠済み”
   } catch (e) {
-    console.warn('unlock failed, try again on next tap', e);
+    console.warn('Audio unlock/preload failed:', e);
+  } finally {
+    unlocking = false;
   }
 }
 
-// iOS/Android両対応のユーザー操作フック
-document.addEventListener('pointerdown', unlockAudio, { passive: true });
+// iOS/Android 両対応：あらゆる最初のジェスチャで解錠
+const unlockEvents = ['pointerdown', 'touchstart', 'click'];
+unlockEvents.forEach(evt => {
+  document.addEventListener(evt, () => {
+    unlockAndPreload(); // 失敗しても次のタップで再試行
+  }, { passive: true, once: false });
+});
 
-// タイマー制御
+// ---- 再生 ----
+function playAlarm() {
+  if (!ctx || !alarmBuffer) {
+    // 念のため再開＆再プリロードを試す
+    unlockAndPreload();
+    return;
+  }
+  if (ctx.state !== 'running') {
+    // バックグラウンド復帰直後など
+    ctx.resume().catch(()=>{});
+  }
+  const src = ctx.createBufferSource();
+  src.buffer = alarmBuffer;
+  src.connect(ctx.destination);
+  src.start();
+}
+
+// ---- タイマー ----
 function stopTimer() {
-  if (timerId) { clearInterval(timerId); timerId = null; }
-  alarm.pause(); alarm.currentTime = 0;
+  if (timerId) {
+    clearInterval(timerId);
+    timerId = null;
+  }
 }
 
 function startTimer(sec = 12) {
@@ -50,20 +76,27 @@ function startTimer(sec = 12) {
 function updateDisplay() {
   const ms = Math.max(0, endAt - Date.now());
   const s = Math.ceil(ms / 1000);
-  countdownEl.textContent = `0:${String(s).padStart(2,'0')}`;
+  countdownEl.textContent = `0:${String(s).padStart(2, '0')}`;
   if (ms <= 0) {
-    clearInterval(timerId); timerId = null;
-    alarm.play().catch(e => console.error('play error:', e));
+    clearInterval(timerId);
+    timerId = null;
+    playAlarm();
     if (navigator.vibrate) navigator.vibrate(200);
   }
 }
 
+// ボタン：トグル開始/停止（クリック自体が解錠イベント）
 button.addEventListener('click', async () => {
-  await unlockAudio();
+  await unlockAndPreload();
   if (timerId) {
     stopTimer();
     countdownEl.textContent = '0:12';
   } else {
     startTimer(12);
   }
+});
+
+// ページ復帰でズレを補正
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && timerId) updateDisplay();
 });
