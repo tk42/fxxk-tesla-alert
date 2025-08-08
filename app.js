@@ -1,124 +1,117 @@
 let timerId = null;
 let endAt = 0;
-
 const countdownEl = document.getElementById('countdown');
 const button = document.getElementById('timerButton');
 
-let ctx = null;
-let alarmBuffer = null;
-let alarmBytes = null;   // ArrayBufferを保持
-let booting = false;
-let needReinit = false;
+let ctx, alarmBuffer, alarmBytes, booting=false, needReinit=false;
 
-async function fetchOnce() {
+async function fetchOnce(path='alarm.mp3') {
   if (alarmBytes) return;
-  const res = await fetch('alarm.mp3'); // GitHub Pagesなら相対パスでOK（index.htmlと同階層）
-  if (!res.ok) throw new Error('fetch alarm.mp3 failed');
+  const res = await fetch(path, { cache: 'reload' });
+  if (!res.ok) throw new Error('fetch failed: ' + path);
   alarmBytes = await res.arrayBuffer();
 }
 
-// コンテキストを必ず“生きた状態”に
 async function ensureContext() {
   if (!ctx || ctx.state === 'closed' || needReinit) {
     ctx = new (window.AudioContext || window.webkitAudioContext)();
-    alarmBuffer = null; // 別Contextなので作り直す
+    alarmBuffer = null;
     needReinit = false;
   }
-  if (ctx.state !== 'running') {
-    try { await ctx.resume(); } catch {}
-  }
+  if (ctx.state !== 'running') { try { await ctx.resume(); } catch {} }
   return ctx.state === 'running';
 }
 
-// デコード（既に済ならスキップ）
 async function ensureDecoded() {
   if (alarmBuffer) return;
   if (!alarmBytes) await fetchOnce();
-  // iOS対策：decodeAudioDataはContextごとにやり直すのが安全
-  alarmBuffer = await ctx.decodeAudioData(alarmBytes.slice(0)); // sliceでコピー渡し
+  // iOS対策：毎Contextでデコードし直す
+  alarmBuffer = await ctx.decodeAudioData(alarmBytes.slice(0));
 }
 
-// 初回タップや再生前に呼ぶ
-async function bootAudioPipeline() {
+async function bootAudio() {
   if (booting) return;
   booting = true;
   try {
     const ok = await ensureContext();
-    if (!ok) throw new Error('AudioContext not running');
+    if (!ok) throw new Error('ctx not running');
     await ensureDecoded();
   } finally {
     booting = false;
   }
 }
 
+function playOscFallback() { // MP3失敗時の最終手段
+  if (!ctx) return;
+  const o = ctx.createOscillator();
+  const g = ctx.createGain();
+  o.type = 'square';
+  o.frequency.value = 880;
+  g.gain.value = 0.1;
+  o.connect(g).connect(ctx.destination);
+  o.start();
+  setTimeout(() => o.stop(), 500);
+}
+
 async function playAlarm() {
   try {
-    await bootAudioPipeline();
-    // 念のため直前にもresume
+    await bootAudio();
     if (ctx.state !== 'running') await ctx.resume();
-    const src = ctx.createBufferSource();
-    src.buffer = alarmBuffer;
-    src.connect(ctx.destination);
-    src.start();
-  } catch (e) {
-    console.warn('play failed, retrying once...', e);
-    // 失敗時は再初期化してもう一度だけ試す
-    needReinit = true;
-    try {
-      await bootAudioPipeline();
+    if (alarmBuffer) {
       const src = ctx.createBufferSource();
       src.buffer = alarmBuffer;
       src.connect(ctx.destination);
       src.start();
-    } catch (e2) {
-      console.error('play retry failed:', e2);
+    } else {
+      playOscFallback();
+    }
+  } catch (e) {
+    console.warn('play failed, retrying...', e);
+    needReinit = true;
+    try {
+      await bootAudio();
+      const src = ctx.createBufferSource();
+      src.buffer = alarmBuffer;
+      src.connect(ctx.destination);
+      src.start();
+    } catch {
+      playOscFallback();
     }
   }
 }
 
-// ===== タイマー =====
-function stopTimer() {
-  if (timerId) { clearInterval(timerId); timerId = null; }
-}
-
-function startTimer(sec = 12) {
+// ===== timer =====
+function stopTimer() { if (timerId){ clearInterval(timerId); timerId=null; } }
+function startTimer(sec=12){
   stopTimer();
-  endAt = Date.now() + sec * 1000;
+  endAt = Date.now() + sec*1000;
   updateDisplay();
   timerId = setInterval(updateDisplay, 200);
 }
-
-function updateDisplay() {
+function updateDisplay(){
   const ms = Math.max(0, endAt - Date.now());
-  const s = Math.ceil(ms / 1000);
-  countdownEl.textContent = `0:${String(s).padStart(2, '0')}`;
-  if (ms <= 0) {
-    clearInterval(timerId); timerId = null;
+  const s  = Math.ceil(ms/1000);
+  countdownEl.textContent = `0:${String(s).padStart(2,'0')}`;
+  if (ms<=0){
+    clearInterval(timerId); timerId=null;
     playAlarm();
     if (navigator.vibrate) navigator.vibrate(200);
   }
 }
 
-// 任意のジェスチャでパイプライン起動（解錠）
-['pointerdown','touchstart','click'].forEach(evt => {
-  document.addEventListener(evt, () => { bootAudioPipeline(); }, { passive:true });
+['pointerdown','touchstart','click'].forEach(evt=>{
+  document.addEventListener(evt, () => { bootAudio(); }, { passive:true });
 });
 
-// ボタン
-button.addEventListener('click', async () => {
-  await bootAudioPipeline();
-  if (timerId) {
-    stopTimer();
-    countdownEl.textContent = '0:12';
-  } else {
-    startTimer(12);
-  }
+button.addEventListener('click', async ()=>{
+  await bootAudio();
+  if (timerId){ stopTimer(); countdownEl.textContent='0:12'; }
+  else { startTimer(12); }
 });
 
-// タブ復帰・ページ遷移で再初期化を促す
-document.addEventListener('visibilitychange', () => {
+document.addEventListener('visibilitychange', ()=>{
   if (document.visibilityState === 'visible' && timerId) updateDisplay();
   if (document.visibilityState === 'hidden') needReinit = true;
 });
-window.addEventListener('pagehide', () => { needReinit = true; });
-window.addEventListener('freeze', () => { needReinit = true; });
+window.addEventListener('pagehide', ()=>{ needReinit = true; });
+window.addEventListener('freeze',   ()=>{ needReinit = true; });
